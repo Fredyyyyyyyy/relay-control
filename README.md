@@ -62,7 +62,7 @@
     </div>
 
     <script>
-        var client = new Paho.MQTT.Client("broker.hivemq.com", 8000, "webclient_" + parseInt(Math.random() * 100, 10));
+        var client = new Paho.MQTT.Client("test.mosquitto.org", 8000, "webclient_" + parseInt(Math.random() * 100, 10));
         client.onConnectionLost = onConnectionLost;
         client.onMessageArrived = onMessageArrived;
         var lastMessageTime = 0;
