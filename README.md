@@ -1,88 +1,90 @@
-#include <WiFi.h>
-#include <PubSubClient.h>
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ovládání relé ESP32</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        .container {
+            text-align: center;
+            background-color: white;
+            padding: 2rem;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        button {
+            font-size: 1rem;
+            padding: 0.5rem 1rem;
+            margin: 0.5rem;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        #status, #relayStatus {
+            margin-top: 1rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Ovládání relé ESP32</h1>
+        <button onclick="sendMessage('ON')">Zapnout</button>
+        <button onclick="sendMessage('OFF')">Vypnout</button>
+        <div id="status">Stav připojení: Odpojeno</div>
+        <div id="relayStatus">Stav relé: Neznámý</div>
+    </div>
 
-const char* ssid = "VASE_WIFI_SIT";
-const char* password = "VASE_WIFI_HESLO";
-const char* mqtt_server = "broker.hivemq.com";
-const int mqtt_port = 1883;
-const char* mqtt_topic = "vasetema/rele1";
+    <script>
+        var client = new Paho.MQTT.Client("broker.hivemq.com", 8000, "webclient_" + parseInt(Math.random() * 100, 10));
+        client.onConnectionLost = onConnectionLost;
+        client.onMessageArrived = onMessageArrived;
 
-const int relayPin = 5;  // GPIO pin pro relé
-bool relayState = false;
+        function connect() {
+            client.connect({onSuccess:onConnect});
+        }
 
-WiFiClient espClient;
-PubSubClient client(espClient);
+        function onConnect() {
+            console.log("Připojeno k MQTT brokeru");
+            document.getElementById('status').innerHTML = "Stav připojení: Připojeno";
+            client.subscribe("vasetema/rele1");
+        }
 
-unsigned long lastMsg = 0;
-const long interval = 300000;  // 5 minut v milisekundách
+        function onConnectionLost(responseObject) {
+            if (responseObject.errorCode !== 0) {
+                console.log("Ztráta spojení: " + responseObject.errorMessage);
+                document.getElementById('status').innerHTML = "Stav připojení: Odpojeno";
+            }
+        }
 
-void setup_wifi() {
-  delay(10);
-  Serial.println("Připojování k WiFi...");
-  WiFi.begin(ssid, password);
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-  Serial.println("WiFi připojeno");
-}
+        function onMessageArrived(message) {
+            console.log("Přijata zpráva: " + message.payloadString);
+            document.getElementById('relayStatus').innerHTML = "Stav relé: " + (message.payloadString === "ON" ? "Zapnuto" : "Vypnuto");
+        }
 
-void callback(char* topic, byte* payload, unsigned int length) {
-  String message = "";
-  for (int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  Serial.println("Přijata zpráva: " + message);
-  
-  if (message == "ON" && !relayState) {
-    digitalWrite(relayPin, HIGH);
-    relayState = true;
-    publishRelayState();
-  } else if (message == "OFF" && relayState) {
-    digitalWrite(relayPin, LOW);
-    relayState = false;
-    publishRelayState();
-  }
-}
+        function sendMessage(state) {
+            var message = new Paho.MQTT.Message(state);
+            message.destinationName = "vasetema/rele1";
+            client.send(message);
+        }
 
-void reconnect() {
-  while (!client.connected()) {
-    Serial.println("Připojování k MQTT...");
-    if (client.connect("ESP32Client")) {
-      Serial.println("MQTT připojeno");
-      client.subscribe(mqtt_topic);
-      publishRelayState();  // Publikuj stav po připojení
-    } else {
-      Serial.print("Chyba, rc=");
-      Serial.print(client.state());
-      Serial.println(" zkouším znovu za 5 sekund");
-      delay(5000);
-    }
-  }
-}
-
-void publishRelayState() {
-  client.publish(mqtt_topic, relayState ? "ON" : "OFF", true);
-}
-
-void setup() {
-  Serial.begin(115200);
-  pinMode(relayPin, OUTPUT);
-  digitalWrite(relayPin, LOW);  // Inicializace relé jako vypnuté
-  setup_wifi();
-  client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(callback);
-}
-
-void loop() {
-  if (!client.connected()) {
-    reconnect();
-  }
-  client.loop();
-
-  unsigned long now = millis();
-  if (now - lastMsg > interval) {
-    lastMsg = now;
-    publishRelayState();  // Pravidelná aktualizace stavu
-  }
-}
+        connect();
+    </script>
+</body>
+</html>
