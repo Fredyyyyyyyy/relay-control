@@ -36,9 +36,16 @@
         button:hover {
             background-color: #45a049;
         }
-        #status, #relayStatus, #esp32Status {
+        #status, #relayStatus, #esp32Status, #log {
             margin-top: 1rem;
             font-weight: bold;
+        }
+        #log {
+            max-height: 100px;
+            overflow-y: auto;
+            text-align: left;
+            font-size: 0.8rem;
+            font-weight: normal;
         }
     </style>
 </head>
@@ -50,6 +57,8 @@
         <div id="status">Stav připojení: Odpojeno</div>
         <div id="esp32Status">Stav ESP32: Neznámý</div>
         <div id="relayStatus">Stav relé: Neznámý</div>
+        <button onclick="reconnect()">Obnovit připojení</button>
+        <div id="log"></div>
     </div>
 
     <script>
@@ -59,21 +68,37 @@
         var lastMessageTime = 0;
         var checkConnectionInterval;
 
+        function log(message) {
+            var logElement = document.getElementById('log');
+            logElement.innerHTML += new Date().toLocaleTimeString() + ": " + message + "<br>";
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
         function connect() {
-            client.connect({onSuccess:onConnect});
+            log("Pokus o připojení k MQTT brokeru...");
+            client.connect({
+                onSuccess: onConnect,
+                onFailure: onConnectFailure,
+                keepAliveInterval: 10
+            });
         }
 
         function onConnect() {
-            console.log("Připojeno k MQTT brokeru");
+            log("Připojeno k MQTT brokeru");
             document.getElementById('status').innerHTML = "Stav připojení: Připojeno";
             client.subscribe("vasetema/rele1");
             client.subscribe("vasetema/rele1/status");
             checkConnectionInterval = setInterval(checkConnection, 15000);
         }
 
+        function onConnectFailure(responseObject) {
+            log("Chyba připojení k MQTT brokeru: " + responseObject.errorMessage);
+            document.getElementById('status').innerHTML = "Stav připojení: Chyba připojení";
+        }
+
         function onConnectionLost(responseObject) {
             if (responseObject.errorCode !== 0) {
-                console.log("Ztráta spojení: " + responseObject.errorMessage);
+                log("Ztráta spojení: " + responseObject.errorMessage);
                 document.getElementById('status').innerHTML = "Stav připojení: Odpojeno";
                 document.getElementById('esp32Status').innerHTML = "Stav ESP32: Neznámý";
                 clearInterval(checkConnectionInterval);
@@ -81,7 +106,7 @@
         }
 
         function onMessageArrived(message) {
-            console.log("Přijata zpráva: " + message.payloadString);
+            log("Přijata zpráva: " + message.destinationName + " - " + message.payloadString);
             lastMessageTime = Date.now();
             if (message.destinationName === "vasetema/rele1") {
                 document.getElementById('relayStatus').innerHTML = "Stav relé: " + (message.payloadString === "ON" ? "Zapnuto" : "Vypnuto");
@@ -91,15 +116,33 @@
         }
 
         function sendMessage(state) {
+            if (!client.isConnected()) {
+                log("Nelze odeslat zprávu. MQTT klient není připojen.");
+                return;
+            }
             var message = new Paho.MQTT.Message(state);
             message.destinationName = "vasetema/rele1";
             client.send(message);
+            log("Odeslána zpráva: " + state);
         }
 
         function checkConnection() {
             if (Date.now() - lastMessageTime > 30000) {
-                document.getElementById('esp32Status').innerHTML = "Stav ESP32: Offline";
+                log("Žádná zpráva přijata v posledních 30 sekundách.");
+                document.getElementById('esp32Status').innerHTML = "Stav ESP32: Pravděpodobně offline";
             }
+            if (!client.isConnected()) {
+                log("MQTT klient není připojen. Pokus o obnovení připojení.");
+                reconnect();
+            }
+        }
+
+        function reconnect() {
+            if (client.isConnected()) {
+                client.disconnect();
+            }
+            log("Pokus o obnovení připojení...");
+            connect();
         }
 
         connect();
