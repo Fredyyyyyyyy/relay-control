@@ -36,7 +36,7 @@
         button:hover {
             background-color: #45a049;
         }
-        #status, #relayStatus {
+        #status, #relayStatus, #esp32Status {
             margin-top: 1rem;
             font-weight: bold;
         }
@@ -48,6 +48,7 @@
         <button onclick="sendMessage('ON')">Zapnout</button>
         <button onclick="sendMessage('OFF')">Vypnout</button>
         <div id="status">Stav připojení: Odpojeno</div>
+        <div id="esp32Status">Stav ESP32: Neznámý</div>
         <div id="relayStatus">Stav relé: Neznámý</div>
     </div>
 
@@ -55,6 +56,8 @@
         var client = new Paho.MQTT.Client("broker.hivemq.com", 8000, "webclient_" + parseInt(Math.random() * 100, 10));
         client.onConnectionLost = onConnectionLost;
         client.onMessageArrived = onMessageArrived;
+        var lastMessageTime = 0;
+        var checkConnectionInterval;
 
         function connect() {
             client.connect({onSuccess:onConnect});
@@ -64,24 +67,39 @@
             console.log("Připojeno k MQTT brokeru");
             document.getElementById('status').innerHTML = "Stav připojení: Připojeno";
             client.subscribe("vasetema/rele1");
+            client.subscribe("vasetema/rele1/status");
+            checkConnectionInterval = setInterval(checkConnection, 15000);
         }
 
         function onConnectionLost(responseObject) {
             if (responseObject.errorCode !== 0) {
                 console.log("Ztráta spojení: " + responseObject.errorMessage);
                 document.getElementById('status').innerHTML = "Stav připojení: Odpojeno";
+                document.getElementById('esp32Status').innerHTML = "Stav ESP32: Neznámý";
+                clearInterval(checkConnectionInterval);
             }
         }
 
         function onMessageArrived(message) {
             console.log("Přijata zpráva: " + message.payloadString);
-            document.getElementById('relayStatus').innerHTML = "Stav relé: " + (message.payloadString === "ON" ? "Zapnuto" : "Vypnuto");
+            lastMessageTime = Date.now();
+            if (message.destinationName === "vasetema/rele1") {
+                document.getElementById('relayStatus').innerHTML = "Stav relé: " + (message.payloadString === "ON" ? "Zapnuto" : "Vypnuto");
+            } else if (message.destinationName === "vasetema/rele1/status") {
+                document.getElementById('esp32Status').innerHTML = "Stav ESP32: " + message.payloadString;
+            }
         }
 
         function sendMessage(state) {
             var message = new Paho.MQTT.Message(state);
             message.destinationName = "vasetema/rele1";
             client.send(message);
+        }
+
+        function checkConnection() {
+            if (Date.now() - lastMessageTime > 30000) {
+                document.getElementById('esp32Status').innerHTML = "Stav ESP32: Offline";
+            }
         }
 
         connect();
