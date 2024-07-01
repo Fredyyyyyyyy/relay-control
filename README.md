@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Ovládání relé ESP32</title>
+   
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js" type="text/javascript"></script>
     <style>
         body {
@@ -62,7 +62,7 @@
     </div>
 
     <script>
-        var client = new Paho.MQTT.Client("test.mosquitto.org", 8000, "webclient_" + parseInt(Math.random() * 100, 10));
+        var client = new Paho.MQTT.Client("broker.hivemq.com", 8000, "webclient_" + parseInt(Math.random() * 100, 10));
         client.onConnectionLost = onConnectionLost;
         client.onMessageArrived = onMessageArrived;
         var lastMessageTime = 0;
@@ -149,3 +149,4 @@
     </script>
 </body>
 </html>
+
