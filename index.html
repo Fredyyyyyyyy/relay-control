@@ -79,6 +79,7 @@
             client.connect({
                 onSuccess: onConnect,
                 onFailure: onConnectFailure,
+                useSSL: false,
                 keepAliveInterval: 10
             });
         }
@@ -149,4 +150,5 @@
     </script>
 </body>
 </html>
+
 
